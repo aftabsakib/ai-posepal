@@ -13,13 +13,13 @@ class MatchRingPainter extends CustomPainter {
     final radius = size.width / 2 - 4;
 
     canvas.drawCircle(center, radius, Paint()
-      ..color = Colors.white.withValues(alpha: 0.15)
+      ..color = const Color(0xFF3A3A2E).withValues(alpha: 0.9)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4);
 
     if (score <= 0) return;
 
-    final color = Color.lerp(const Color(0xFF6C63FF), const Color(0xFF03DAC6), score)!;
+    final color = Color.lerp(const Color(0xFFF5F0E8), const Color(0xFFC8F04A), score)!;
     final sweepAngle = 2 * pi * score;
 
     canvas.drawArc(

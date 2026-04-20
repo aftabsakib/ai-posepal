@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'dart:typed_data';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
@@ -273,9 +272,12 @@ class _CameraScreenState extends State<CameraScreen>
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(msg),
+        content: Text(msg,
+          style: const TextStyle(color: Color(0xFFF5F0E8), fontWeight: FontWeight.w600)),
         duration: const Duration(seconds: 2),
-        backgroundColor: Colors.black87));
+        backgroundColor: const Color(0xFF1A1A14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        behavior: SnackBarBehavior.floating));
   }
 
   @override
@@ -382,15 +384,15 @@ class _CameraScreenState extends State<CameraScreen>
                     width: 140, height: 140,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.black.withValues(alpha: 0.6),
-                      border: Border.all(color: const Color(0xFF6C63FF), width: 3),
+                      color: const Color(0xFF1A1A14).withValues(alpha: 0.92),
+                      border: Border.all(color: const Color(0xFFC8F04A), width: 3),
                     ),
                     child: Center(
                       child: Text('$_timerCountdown',
                           style: const TextStyle(
                               fontSize: 72,
                               fontWeight: FontWeight.w800,
-                              color: Colors.white)),
+                              color: Color(0xFFC8F04A))),
                     ),
                   ),
                 ),
@@ -428,10 +430,10 @@ class _TopBar extends StatelessWidget {
       children: [
         const Text('PosePal',
             style: TextStyle(
-                color: Colors.white,
+                color: Color(0xFFF5F0E8),
                 fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3)),
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5)),
         GestureDetector(
           onTap: onGridToggle,
           child: Container(
@@ -439,10 +441,12 @@ class _TopBar extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: showGrid
-                  ? const Color(0xFF6C63FF).withValues(alpha: 0.9)
-                  : Colors.black.withValues(alpha: 0.4),
+                  ? const Color(0xFFC8F04A).withValues(alpha: 0.9)
+                  : const Color(0xFF1A1A14).withValues(alpha: 0.8),
             ),
-            child: const Icon(Icons.grid_on_rounded, color: Colors.white, size: 20),
+            child: Icon(Icons.grid_on_rounded,
+              color: showGrid ? const Color(0xFF1A1A14) : const Color(0xFFF5F0E8),
+              size: 20),
           ),
         ),
       ],
@@ -462,62 +466,54 @@ class _PoseGuideCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final pct = (matchScore * 100).round();
     final matchColor =
-        Color.lerp(Colors.white70, const Color(0xFF03DAC6), matchScore)!;
+        Color.lerp(const Color(0xFFF5F0E8), const Color(0xFFC8F04A), matchScore)!;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: matchColor.withValues(alpha: 0.5)),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A14).withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: matchColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: matchColor.withValues(alpha: 0.15),
+              border: Border.all(color: matchColor.withValues(alpha: 0.7)),
+            ),
+            child: Center(
+              child: Text('$pct%',
+                  style: TextStyle(
+                      color: matchColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800)),
+            ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: matchColor.withValues(alpha: 0.15),
-                  border: Border.all(color: matchColor.withValues(alpha: 0.6)),
-                ),
-                child: Center(
-                  child: Text('$pct%',
-                      style: TextStyle(
-                          color: matchColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(suggestion.title,
-                        style: TextStyle(
-                            color: matchColor,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14)),
-                    Text(suggestion.instruction,
-                        style:
-                            const TextStyle(color: Colors.white70, fontSize: 12),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: onDismiss,
-                child:
-                    const Icon(Icons.close_rounded, color: Colors.white38, size: 18),
-              ),
-            ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(suggestion.title,
+                    style: TextStyle(
+                        color: matchColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                Text(suggestion.instruction,
+                    style: const TextStyle(color: Color(0xFF9A9A8A), fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
-        ),
+          GestureDetector(
+            onTap: onDismiss,
+            child: const Icon(Icons.close_rounded, color: Color(0xFF4A4A3A), size: 18),
+          ),
+        ],
       ),
     );
   }
@@ -544,16 +540,16 @@ class _BottomControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: EdgeInsets.only(
-            left: 28, right: 28, top: 24,
-            bottom: MediaQuery.of(context).padding.bottom + 28,
-          ),
-          color: Colors.black.withValues(alpha: 0.45),
-          child: Row(
+    return Container(
+      padding: EdgeInsets.only(
+        left: 28, right: 28, top: 24,
+        bottom: MediaQuery.of(context).padding.bottom + 28,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A1A14),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -575,8 +571,6 @@ class _BottomControls extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
     );
   }
 }
@@ -596,31 +590,25 @@ class _SuggestButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            colors: onTap == null
-                ? [Colors.grey.shade700, Colors.grey.shade800]
-                : [const Color(0xFF6C63FF), const Color(0xFF3D35B5)],
-          ),
-          boxShadow: onTap != null
-              ? [BoxShadow(
-                  color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4))]
-              : [],
+          color: onTap == null
+              ? const Color(0xFF2E2E24)
+              : const Color(0xFFC8F04A),
         ),
         child: isLoading
             ? const SizedBox(
                 width: 18, height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
-            : const Row(children: [
-                Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
-                SizedBox(width: 7),
+                    strokeWidth: 2, color: Color(0xFF1A1A14)))
+            : Row(children: [
+                Icon(Icons.auto_awesome_rounded,
+                  color: onTap == null ? const Color(0xFF4A4A3A) : const Color(0xFF1A1A14),
+                  size: 16),
+                const SizedBox(width: 7),
                 Text('Suggest',
                     style: TextStyle(
-                        color: Colors.white,
+                        color: onTap == null ? const Color(0xFF4A4A3A) : const Color(0xFF1A1A14),
                         fontSize: 14,
-                        fontWeight: FontWeight.w600)),
+                        fontWeight: FontWeight.w700)),
               ]),
       ),
     );
@@ -651,8 +639,8 @@ class _ShutterButton extends StatelessWidget {
                 boxShadow: [
                   BoxShadow(
                     color: Color.lerp(
-                        Colors.white30,
-                        const Color(0xFF03DAC6).withValues(alpha: 0.6),
+                        const Color(0xFFF5F0E8).withValues(alpha: 0.3),
+                        const Color(0xFFC8F04A).withValues(alpha: 0.55),
                         matchScore)!,
                     blurRadius: 16 + matchScore * 12,
                     spreadRadius: matchScore * 4,
@@ -684,10 +672,12 @@ class _IconBtn extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: active
-              ? const Color(0xFF6C63FF).withValues(alpha: 0.8)
-              : Colors.white.withValues(alpha: 0.12),
+              ? const Color(0xFFC8F04A)
+              : const Color(0xFF2E2E24),
         ),
-        child: Icon(icon, color: Colors.white, size: 22),
+        child: Icon(icon,
+          color: active ? const Color(0xFF1A1A14) : const Color(0xFFF5F0E8),
+          size: 22),
       ),
     );
   }

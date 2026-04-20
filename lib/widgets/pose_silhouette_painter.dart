@@ -41,8 +41,8 @@ class PoseSilhouettePainter extends CustomPainter {
     final score = matchScore.clamp(0.0, 1.0);
 
     final color = Color.lerp(
-      Colors.white.withValues(alpha: 0.35 * opacity),
-      const Color(0xFF03DAC6).withValues(alpha: 0.85 * opacity),
+      const Color(0xFFF5F0E8).withValues(alpha: 0.4 * opacity),
+      const Color(0xFFC8F04A).withValues(alpha: 0.9 * opacity),
       score,
     )!;
 
