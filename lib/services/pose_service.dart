@@ -40,7 +40,7 @@ class PoseService {
             {
               'type': 'text',
               'text':
-                  'This is a $context. Suggest 3 poses. Respond with a JSON array of exactly 3 objects, each with "title" (short name) and "instruction" (1-2 sentence guide). No extra text, just valid JSON.',
+                  'This is a $context. Suggest 3 poses. Respond ONLY with a JSON array of exactly 3 objects. Each object must have: "title" (2-4 word name), "instruction" (1-2 sentence guide), "pose_type" (one of: neutral, powerPose, crossedArms, oneArmUp, casualLean, vArms). No extra text, just valid JSON.',
             }
           ],
         }
