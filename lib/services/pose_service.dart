@@ -3,13 +3,13 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../models/pose_suggestion.dart';
 
-class ClaudeService {
-  static const _apiUrl = 'https://api.anthropic.com/v1/messages';
-  static const _model = 'claude-sonnet-4-6';
+class PoseService {
+  static const _apiUrl = 'https://api.openai.com/v1/chat/completions';
+  static const _model = 'gpt-4.1';
 
   final String apiKey;
 
-  ClaudeService({required this.apiKey});
+  PoseService({required this.apiKey});
 
   Future<List<PoseSuggestion>> getSuggestions({
     required Uint8List imageBytes,
@@ -21,18 +21,20 @@ class ClaudeService {
     final body = jsonEncode({
       'model': _model,
       'max_tokens': 512,
-      'system':
-          'You are a professional photography pose coach. Suggest 3 specific, actionable poses. Keep each to 1-2 sentences. Be encouraging and practical.',
       'messages': [
+        {
+          'role': 'system',
+          'content':
+              'You are a professional photography pose coach. Suggest 3 specific, actionable poses. Keep each to 1-2 sentences. Be encouraging and practical.',
+        },
         {
           'role': 'user',
           'content': [
             {
-              'type': 'image',
-              'source': {
-                'type': 'base64',
-                'media_type': 'image/jpeg',
-                'data': base64Image,
+              'type': 'image_url',
+              'image_url': {
+                'url': 'data:image/jpeg;base64,$base64Image',
+                'detail': 'low',
               },
             },
             {
@@ -49,18 +51,17 @@ class ClaudeService {
       Uri.parse(_apiUrl),
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'Authorization': 'Bearer $apiKey',
       },
       body: body,
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Claude API error: ${response.statusCode}');
+      throw Exception('OpenAI API error: ${response.statusCode}');
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final text = (data['content'] as List).first['text'] as String;
+    final text = data['choices'][0]['message']['content'] as String;
 
     final jsonStart = text.indexOf('[');
     final jsonEnd = text.lastIndexOf(']') + 1;

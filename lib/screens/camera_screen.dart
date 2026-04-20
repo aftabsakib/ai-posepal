@@ -5,7 +5,7 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:gal/gal.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/pose_suggestion.dart';
-import '../services/claude_service.dart';
+import '../services/pose_service.dart';
 import '../widgets/skeleton_painter.dart';
 import '../widgets/suggestion_sheet.dart';
 import '../env.dart';
@@ -22,7 +22,7 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
   CameraController? _controller;
   final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
-  final ClaudeService _claudeService = ClaudeService(apiKey: Env.claudeApiKey);
+  final PoseService _claudeService = PoseService(apiKey: Env.openAiApiKey);
 
   List<Pose> _poses = [];
   bool _isProcessingPose = false;
