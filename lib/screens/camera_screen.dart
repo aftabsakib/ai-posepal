@@ -10,7 +10,6 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/pose_suggestion.dart';
 import '../models/pose_template.dart';
 import '../services/pose_service.dart';
-import '../widgets/skeleton_painter.dart';
 import '../widgets/pose_silhouette_painter.dart';
 import '../widgets/match_ring_painter.dart';
 import '../widgets/suggestion_sheet.dart';
@@ -314,9 +313,6 @@ class _CameraScreenState extends State<CameraScreen>
 
     final isFront =
         widget.cameras[_cameraIndex].lensDirection == CameraLensDirection.front;
-    final rawSize = _controller!.value.previewSize;
-    if (rawSize == null) return const SizedBox.shrink();
-    final imageSize = Size(rawSize.height, rawSize.width);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -342,11 +338,6 @@ class _CameraScreenState extends State<CameraScreen>
                   ),
                 ),
               ),
-
-            CustomPaint(
-              painter: SkeletonPainter(
-                  poses: _poses, imageSize: imageSize, isFrontCamera: isFront),
-            ),
 
             AnimatedBuilder(
               animation: _flashOpacity,
