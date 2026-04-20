@@ -105,7 +105,10 @@ class PoseTemplate {
   static PoseType fromString(String s) {
     return PoseType.values.firstWhere(
       (t) => t.name == s,
-      orElse: () => PoseType.neutral,
+      orElse: () {
+        assert(false, 'Unknown PoseType: "$s" — falling back to neutral');
+        return PoseType.neutral;
+      },
     );
   }
 }

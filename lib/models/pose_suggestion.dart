@@ -13,8 +13,8 @@ class PoseSuggestion {
 
   factory PoseSuggestion.fromJson(Map<String, dynamic> json) {
     return PoseSuggestion(
-      title: json['title'] as String,
-      instruction: json['instruction'] as String,
+      title: (json['title'] as String?) ?? '',
+      instruction: (json['instruction'] as String?) ?? '',
       poseType: PoseTemplate.fromString(json['pose_type'] as String? ?? 'neutral'),
     );
   }
