@@ -44,6 +44,17 @@ class _CameraScreenState extends State<CameraScreen>
   double _matchScore = 0.0;
   Color _accentColor = kAccentColors[0];
 
+  // Auto-capture
+  bool _autoCaptureFired = false;
+
+  // Coaching hint
+  String? _coachingHint;
+  DateTime _lastCoachUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Post-capture overlay
+  Uint8List? _lastCaptureBytes;
+  bool _showPostCapture = false;
+
   // Animations
   late AnimationController _silhouetteController;
   late AnimationController _flashController;
@@ -104,16 +115,38 @@ class _CameraScreenState extends State<CameraScreen>
       final input = _buildInputImage(image);
       if (input == null) return;
       final poses = await _poseDetector.processImage(input);
-      if (mounted) {
-        setState(() {
-          _poses = poses;
-          if (_activeSuggestion != null && poses.isNotEmpty) {
-            _matchScore = _computeMatch(poses.first, _activeSuggestion!.poseType);
-          } else {
-            _matchScore = 0;
-          }
-        });
+      if (!mounted) return;
+
+      double newScore = 0;
+      String? newHint;
+
+      if (_activeSuggestion != null && poses.isNotEmpty) {
+        newScore = _computeMatch(poses.first, _activeSuggestion!.poseType);
+
+        // Throttle coaching hint to once per second
+        final now = DateTime.now();
+        if (now.difference(_lastCoachUpdate).inMilliseconds > 900) {
+          _lastCoachUpdate = now;
+          newHint = newScore < 0.85
+              ? _computeCoachingHint(poses.first, _activeSuggestion!.poseType)
+              : null;
+        } else {
+          newHint = _coachingHint;
+        }
+
+        // Auto-capture at 90% match
+        if (newScore >= 0.90 && !_autoCaptureFired && !_takingPhoto && !_timerActive) {
+          _autoCaptureFired = true;
+          HapticFeedback.heavyImpact();
+          _capturePhoto();
+        }
       }
+
+      setState(() {
+        _poses = poses;
+        _matchScore = newScore;
+        _coachingHint = newHint;
+      });
     } finally {
       _processingPose = false;
     }
@@ -156,13 +189,79 @@ class _CameraScreenState extends State<CameraScreen>
 
       final dNormX = (dLm.x - minX) / rangeX;
       final dNormY = (dLm.y - minY) / rangeY;
-
       final dist = sqrt(pow(dNormX - tPos.dx, 2) + pow(dNormY - tPos.dy, 2));
       totalScore += (1 - dist.clamp(0.0, 1.0));
       count++;
     }
 
     return count > 0 ? (totalScore / count).clamp(0.0, 1.0) : 0.0;
+  }
+
+  String? _computeCoachingHint(Pose detected, PoseType targetType) {
+    final template = PoseTemplate.all[targetType];
+    if (template == null) return null;
+
+    double minX = double.infinity, maxX = 0, minY = double.infinity, maxY = 0;
+    for (final lm in detected.landmarks.values) {
+      if (lm.x < minX) minX = lm.x;
+      if (lm.x > maxX) maxX = lm.x;
+      if (lm.y < minY) minY = lm.y;
+      if (lm.y > maxY) maxY = lm.y;
+    }
+    final rangeX = (maxX - minX).clamp(1.0, double.infinity);
+    final rangeY = (maxY - minY).clamp(1.0, double.infinity);
+
+    final joints = <List<dynamic>>[
+      ['lWrist', PoseLandmarkType.leftWrist],
+      ['rWrist', PoseLandmarkType.rightWrist],
+      ['lElbow', PoseLandmarkType.leftElbow],
+      ['rElbow', PoseLandmarkType.rightElbow],
+      ['lShoulder', PoseLandmarkType.leftShoulder],
+      ['rShoulder', PoseLandmarkType.rightShoulder],
+    ];
+
+    String? worstHint;
+    double worstDist = 0.12; // minimum threshold to show any hint
+
+    for (final joint in joints) {
+      final key = joint[0] as String;
+      final type = joint[1] as PoseLandmarkType;
+      final tPos = template.landmarks[key];
+      final dLm = detected.landmarks[type];
+      if (tPos == null || dLm == null || dLm.likelihood < 0.5) continue;
+
+      final dNormX = (dLm.x - minX) / rangeX;
+      final dNormY = (dLm.y - minY) / rangeY;
+      final dx = dNormX - tPos.dx;
+      final dy = dNormY - tPos.dy;
+      final dist = sqrt(dx * dx + dy * dy);
+
+      if (dist > worstDist) {
+        final hint = _hintForJoint(key, dx, dy);
+        if (hint != null) {
+          worstDist = dist;
+          worstHint = hint;
+        }
+      }
+    }
+
+    return worstHint;
+  }
+
+  String? _hintForJoint(String joint, double dx, double dy) {
+    final side = joint.startsWith('l') ? 'left' : 'right';
+    if (joint == 'lWrist' || joint == 'rWrist') {
+      if (dy > 0.12) return 'Lift your $side hand';
+      if (dy < -0.12) return 'Lower your $side hand';
+      if (dx.abs() > 0.15) return dx > 0 ? 'Bring your $side hand in' : 'Stretch your $side hand out';
+    } else if (joint == 'lElbow' || joint == 'rElbow') {
+      if (dy > 0.12) return 'Raise your $side elbow';
+      if (dy < -0.12) return 'Lower your $side elbow';
+      if (dx.abs() > 0.15) return dx > 0 ? 'Pull your $side elbow in' : 'Push your $side elbow out';
+    } else if (joint == 'lShoulder' || joint == 'rShoulder') {
+      if (dy.abs() > 0.10) return dy > 0 ? 'Drop your $side shoulder' : 'Lift your $side shoulder';
+    }
+    return null;
   }
 
   InputImage? _buildInputImage(CameraImage image) {
@@ -209,6 +308,8 @@ class _CameraScreenState extends State<CameraScreen>
     setState(() {
       _activeSuggestion = s;
       _matchScore = 0;
+      _coachingHint = null;
+      _autoCaptureFired = false;
       _accentColor = accentForPoseType(s.poseType);
     });
   }
@@ -220,8 +321,17 @@ class _CameraScreenState extends State<CameraScreen>
     _flashController.forward(from: 0).then((_) => _flashController.reverse());
     try {
       final xFile = await _controller!.takePicture();
+      final bytes = await xFile.readAsBytes();
       await Gal.putImage(xFile.path);
-      _toast('Saved to gallery');
+      if (mounted) {
+        setState(() {
+          _lastCaptureBytes = bytes;
+          _showPostCapture = true;
+        });
+        Future.delayed(const Duration(milliseconds: 2800), () {
+          if (mounted) setState(() => _showPostCapture = false);
+        });
+      }
     } catch (_) {
       _toast('Failed to save photo');
     } finally {
@@ -259,8 +369,7 @@ class _CameraScreenState extends State<CameraScreen>
     if (_controller == null || !_controller!.value.isInitialized) return;
     final box = context.findRenderObject() as RenderBox;
     final offset = box.globalToLocal(details.globalPosition);
-    final point = Offset(
-        offset.dx / box.size.width, offset.dy / box.size.height);
+    final point = Offset(offset.dx / box.size.width, offset.dy / box.size.height);
     _controller!.setFocusPoint(point);
     _controller!.setExposurePoint(point);
   }
@@ -313,13 +422,10 @@ class _CameraScreenState extends State<CameraScreen>
   Widget build(BuildContext context) {
     if (_controller == null || !_controller!.value.isInitialized) {
       return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
+        backgroundColor: Color(0xFF1A1A14),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFC8F04A))),
       );
     }
-
-    final isFront =
-        widget.cameras[_cameraIndex].lensDirection == CameraLensDirection.front;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -339,7 +445,8 @@ class _CameraScreenState extends State<CameraScreen>
                 animation: _silhouetteOpacity,
                 builder: (_, __) => CustomPaint(
                   painter: PoseSilhouettePainter(
-                    template: PoseTemplate.all[_activeSuggestion!.poseType] ?? PoseTemplate.all[PoseType.neutral]!,
+                    template: PoseTemplate.all[_activeSuggestion!.poseType] ??
+                        PoseTemplate.all[PoseType.neutral]!,
                     matchScore: _matchScore,
                     opacity: _silhouetteOpacity.value,
                     accentColor: _accentColor,
@@ -368,18 +475,28 @@ class _CameraScreenState extends State<CameraScreen>
               Positioned(
                 top: MediaQuery.of(context).padding.top + 64,
                 left: 16, right: 16,
-                child: _PoseGuideCard(
-                  suggestion: _activeSuggestion!,
-                  matchScore: _matchScore,
-                  accentColor: _accentColor,
-                  onDismiss: () {
-                    _silhouetteController.reverse();
-                    Future.delayed(const Duration(milliseconds: 600), () {
-                      if (mounted) {
-                        setState(() { _activeSuggestion = null; _matchScore = 0; });
-                      }
-                    });
-                  },
+                child: Column(
+                  children: [
+                    _PoseGuideCard(
+                      suggestion: _activeSuggestion!,
+                      matchScore: _matchScore,
+                      accentColor: _accentColor,
+                      onDismiss: () {
+                        _silhouetteController.reverse();
+                        Future.delayed(const Duration(milliseconds: 600), () {
+                          if (mounted) setState(() {
+                            _activeSuggestion = null;
+                            _matchScore = 0;
+                            _coachingHint = null;
+                          });
+                        });
+                      },
+                    ),
+                    if (_coachingHint != null) ...[
+                      const SizedBox(height: 8),
+                      _CoachingHint(hint: _coachingHint!, accentColor: _accentColor),
+                    ],
+                  ],
                 ),
               ),
 
@@ -392,14 +509,14 @@ class _CameraScreenState extends State<CameraScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: const Color(0xFF1A1A14).withValues(alpha: 0.92),
-                      border: Border.all(color: const Color(0xFFC8F04A), width: 3),
+                      border: Border.all(color: _accentColor, width: 3),
                     ),
                     child: Center(
                       child: Text('$_timerCountdown',
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 72,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFFC8F04A))),
+                              color: _accentColor)),
                     ),
                   ),
                 ),
@@ -418,12 +535,170 @@ class _CameraScreenState extends State<CameraScreen>
                 timerActive: _timerActive,
               ),
             ),
+
+            // Post-capture overlay
+            if (_showPostCapture && _lastCaptureBytes != null)
+              GestureDetector(
+                onTap: () => setState(() => _showPostCapture = false),
+                child: _PostCaptureOverlay(
+                  imageBytes: _lastCaptureBytes!,
+                  accentColor: _accentColor,
+                  poseTitle: _activeSuggestion?.title,
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 }
+
+// ── Coaching hint pill ────────────────────────────────────────────────────────
+
+class _CoachingHint extends StatelessWidget {
+  final String hint;
+  final Color accentColor;
+
+  const _CoachingHint({required this.hint, required this.accentColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        key: ValueKey(hint),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: accentColor.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: accentColor.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.arrow_upward_rounded, color: accentColor, size: 14),
+            const SizedBox(width: 6),
+            Text(hint,
+              style: TextStyle(
+                color: accentColor,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Post-capture overlay ──────────────────────────────────────────────────────
+
+class _PostCaptureOverlay extends StatefulWidget {
+  final Uint8List imageBytes;
+  final Color accentColor;
+  final String? poseTitle;
+
+  const _PostCaptureOverlay({
+    required this.imageBytes,
+    required this.accentColor,
+    this.poseTitle,
+  });
+
+  @override
+  State<_PostCaptureOverlay> createState() => _PostCaptureOverlayState();
+}
+
+class _PostCaptureOverlayState extends State<_PostCaptureOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeIn;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 400));
+    _fadeIn = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  static const _messages = [
+    'You nailed it.',
+    'That\'s the one.',
+    'Main character energy.',
+    'Absolutely you.',
+    'Pure fire.',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final message = _messages[
+        (widget.poseTitle?.hashCode ?? 0).abs() % _messages.length];
+
+    return FadeTransition(
+      opacity: _fadeIn,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.memory(widget.imageBytes, fit: BoxFit.cover),
+          Container(color: Colors.black.withValues(alpha: 0.45)),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: widget.accentColor,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('SAVED',
+                  style: const TextStyle(
+                    color: Color(0xFF1A1A14),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                  )),
+              ),
+              const SizedBox(height: 16),
+              Text(message,
+                style: const TextStyle(
+                  color: Color(0xFFF5F0E8),
+                  fontSize: 36,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (widget.poseTitle != null) ...[
+                const SizedBox(height: 8),
+                Text(widget.poseTitle!,
+                  style: TextStyle(
+                    color: widget.accentColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  )),
+              ],
+              const SizedBox(height: 48),
+              Text('tap to dismiss',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  fontSize: 12,
+                )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Top bar ───────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
   final bool showGrid;
@@ -461,6 +736,8 @@ class _TopBar extends StatelessWidget {
     );
   }
 }
+
+// ── Pose guide card ───────────────────────────────────────────────────────────
 
 class _PoseGuideCard extends StatelessWidget {
   final PoseSuggestion suggestion;
@@ -531,6 +808,8 @@ class _PoseGuideCard extends StatelessWidget {
   }
 }
 
+// ── Bottom controls ───────────────────────────────────────────────────────────
+
 class _BottomControls extends StatelessWidget {
   final VoidCallback? onSuggest;
   final VoidCallback? onShutter;
@@ -564,27 +843,24 @@ class _BottomControls extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _SuggestButton(onTap: onSuggest, isLoading: isFetchingSuggestions),
+          _ShutterButton(onTap: onShutter, matchScore: matchScore, accentColor: accentColor),
+          Column(
             children: [
-              _SuggestButton(
-                  onTap: onSuggest, isLoading: isFetchingSuggestions),
-              _ShutterButton(onTap: onShutter, matchScore: matchScore, accentColor: accentColor),
-              Column(
-                children: [
-                  _IconBtn(icon: Icons.flip_camera_ios_rounded, onTap: onFlip),
-                  const SizedBox(height: 8),
-                  _IconBtn(
-                    icon: timerActive
-                        ? Icons.timer_off_rounded
-                        : Icons.timer_rounded,
-                    onTap: onTimer,
-                    active: timerActive,
-                  ),
-                ],
+              _IconBtn(icon: Icons.flip_camera_ios_rounded, onTap: onFlip),
+              const SizedBox(height: 8),
+              _IconBtn(
+                icon: timerActive ? Icons.timer_off_rounded : Icons.timer_rounded,
+                onTap: onTimer,
+                active: timerActive,
               ),
             ],
           ),
+        ],
+      ),
     );
   }
 }
@@ -604,9 +880,7 @@ class _SuggestButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: onTap == null
-              ? const Color(0xFF2E2E24)
-              : const Color(0xFFC8F04A),
+          color: onTap == null ? const Color(0xFF2E2E24) : const Color(0xFFC8F04A),
         ),
         child: isLoading
             ? const SizedBox(
@@ -679,8 +953,7 @@ class _IconBtn extends StatelessWidget {
   final VoidCallback onTap;
   final bool active;
 
-  const _IconBtn(
-      {required this.icon, required this.onTap, this.active = false});
+  const _IconBtn({required this.icon, required this.onTap, this.active = false});
 
   @override
   Widget build(BuildContext context) {
@@ -690,9 +963,7 @@ class _IconBtn extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: active
-              ? const Color(0xFFC8F04A)
-              : const Color(0xFF2E2E24),
+          color: active ? const Color(0xFFC8F04A) : const Color(0xFF2E2E24),
         ),
         child: Icon(icon,
           color: active ? const Color(0xFF1A1A14) : const Color(0xFFF5F0E8),
@@ -702,13 +973,13 @@ class _IconBtn extends StatelessWidget {
   }
 }
 
+// ── Grid overlay ──────────────────────────────────────────────────────────────
+
 class _GridOverlay extends StatelessWidget {
   const _GridOverlay();
 
   @override
-  Widget build(BuildContext context) {
-    return CustomPaint(painter: _GridPainter());
-  }
+  Widget build(BuildContext context) => CustomPaint(painter: _GridPainter());
 }
 
 class _GridPainter extends CustomPainter {
