@@ -117,6 +117,8 @@ class _SuggestionCard extends StatelessWidget {
                     matchScore: 0,
                     opacity: 1,
                     accentColor: accent,
+                    anchor: const Offset(0.5, 0.5),
+                    compositionScale: 0.75,
                   ),
                 ),
               ),

@@ -6,7 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:gal/gal.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../models/pose_suggestion.dart';
+import '../models/pose_suggestion.dart' show PoseSuggestion, CompositionPosition, CompositionPositionX;
 import '../models/pose_template.dart';
 import '../services/pose_service.dart';
 import '../widgets/pose_silhouette_painter.dart';
@@ -36,6 +36,9 @@ class _CameraScreenState extends State<CameraScreen>
   final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
   List<Pose> _poses = [];
   bool _processingPose = false;
+  bool _isFrontCamera = false;
+  int _lastImgW = 0;
+  int _lastImgH = 0;
 
   // Frame throttle — cap pose detection at ~10 FPS
   DateTime _lastFrameTime = DateTime.fromMillisecondsSinceEpoch(0);
@@ -110,6 +113,7 @@ class _CameraScreenState extends State<CameraScreen>
     _minZoom = await _controller!.getMinZoomLevel();
     _maxZoom = await _controller!.getMaxZoomLevel();
     _currentZoom = 1.0;
+    _isFrontCamera = cam.lensDirection == CameraLensDirection.front;
     _controller!.startImageStream(_onFrame);
     setState(() {});
   }
@@ -128,19 +132,27 @@ class _CameraScreenState extends State<CameraScreen>
       final poses = await _poseDetector.processImage(input);
       if (!mounted) return;
 
-      // Update pose list without setState — only used for isEmpty/length checks
+      // Update pose list + image dims without setState
       _poses = poses;
+      _lastImgW = image.width;
+      _lastImgH = image.height;
 
       if (_activeSuggestion != null && poses.isNotEmpty) {
-        final newScore = _computeMatch(poses.first, _activeSuggestion!.poseType);
+        final newScore = _computeMatch(
+            poses.first, _activeSuggestion!.poseType, _activeSuggestion!.compositionPosition);
         _matchScoreNotifier.value = newScore;
 
         // Coaching hint throttled to ~1 per second independently of frame rate
         if (now.difference(_lastCoachUpdate).inMilliseconds > 900) {
           _lastCoachUpdate = now;
-          _coachingHintNotifier.value = newScore < 0.85
-              ? _computeCoachingHint(poses.first, _activeSuggestion!.poseType)
-              : null;
+          if (newScore < 0.85) {
+            // Position hint takes priority — can't nail pose if standing in wrong spot
+            _coachingHintNotifier.value =
+                _computePositionHint(poses.first, _activeSuggestion!.compositionPosition) ??
+                _computeCoachingHint(poses.first, _activeSuggestion!.poseType);
+          } else {
+            _coachingHintNotifier.value = null;
+          }
         }
 
         // Auto-capture at 90% — fires once per selected suggestion
@@ -157,7 +169,13 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  double _computeMatch(Pose detected, PoseType targetType) {
+  double _computeMatch(Pose detected, PoseType targetType, CompositionPosition composition) {
+    final poseScore = _computePoseScore(detected, targetType);
+    final positionScore = _computePositionScore(detected, composition);
+    return (poseScore * 0.60 + positionScore * 0.40).clamp(0.0, 1.0);
+  }
+
+  double _computePoseScore(Pose detected, PoseType targetType) {
     final template = PoseTemplate.all[targetType];
     if (template == null) return 0;
 
@@ -200,6 +218,61 @@ class _CameraScreenState extends State<CameraScreen>
     }
 
     return count > 0 ? (totalScore / count).clamp(0.0, 1.0) : 0.0;
+  }
+
+  // Returns how well the person's position in the frame matches the composition target.
+  // Normalizes ML Kit coords to portrait space (0–1). On typical Android (90° sensor),
+  // portrait width = raw height, portrait height = raw width.
+  double _computePositionScore(Pose detected, CompositionPosition target) {
+    if (_lastImgW == 0) return 0.5;
+    final lHip = detected.landmarks[PoseLandmarkType.leftHip];
+    final rHip = detected.landmarks[PoseLandmarkType.rightHip];
+    if (lHip == null || rHip == null) return 0.5;
+
+    final portraitW = _lastImgW > _lastImgH ? _lastImgH.toDouble() : _lastImgW.toDouble();
+    final portraitH = _lastImgW > _lastImgH ? _lastImgW.toDouble() : _lastImgH.toDouble();
+
+    final rawX = (lHip.x + rHip.x) / 2;
+    final rawY = (lHip.y + rHip.y) / 2;
+
+    final normX = _isFrontCamera
+        ? 1.0 - rawX / portraitW
+        : rawX / portraitW;
+    final normY = (rawY / portraitH).clamp(0.0, 1.0);
+
+    final targetAnchor = target.anchor;
+    final dx = normX.clamp(0.0, 1.0) - targetAnchor.dx;
+    final dy = normY - targetAnchor.dy;
+    final dist = sqrt(dx * dx + dy * dy);
+
+    return (1.0 - dist * 3.0).clamp(0.0, 1.0);
+  }
+
+  // Position hint takes priority over pose hint — wrong spot = wrong shot.
+  String? _computePositionHint(Pose detected, CompositionPosition target) {
+    if (_lastImgW == 0) return null;
+    final lHip = detected.landmarks[PoseLandmarkType.leftHip];
+    final rHip = detected.landmarks[PoseLandmarkType.rightHip];
+    if (lHip == null || rHip == null) return null;
+
+    final portraitW = _lastImgW > _lastImgH ? _lastImgH.toDouble() : _lastImgW.toDouble();
+    final portraitH = _lastImgW > _lastImgH ? _lastImgW.toDouble() : _lastImgH.toDouble();
+
+    final rawX = (lHip.x + rHip.x) / 2;
+    final rawY = (lHip.y + rHip.y) / 2;
+
+    final normX = (_isFrontCamera ? 1.0 - rawX / portraitW : rawX / portraitW).clamp(0.0, 1.0);
+    final normY = (rawY / portraitH).clamp(0.0, 1.0);
+
+    final dx = normX - target.anchor.dx;
+    final dy = normY - target.anchor.dy;
+
+    if (dx.abs() > dy.abs()) {
+      if (dx.abs() > 0.12) return dx > 0 ? 'Step to the left' : 'Step to the right';
+    } else {
+      if (dy.abs() > 0.12) return dy > 0 ? 'Step back a little' : 'Step closer';
+    }
+    return null;
   }
 
   String? _computeCoachingHint(Pose detected, PoseType targetType) {
@@ -454,6 +527,8 @@ class _CameraScreenState extends State<CameraScreen>
                       matchScore: score,
                       opacity: _silhouetteOpacity.value,
                       accentColor: _accentColor,
+                      anchor: _activeSuggestion!.compositionPosition.anchor,
+                      compositionScale: _activeSuggestion!.compositionPosition.silhouetteScale,
                     ),
                   ),
                 ),
