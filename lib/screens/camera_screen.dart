@@ -37,19 +37,24 @@ class _CameraScreenState extends State<CameraScreen>
   List<Pose> _poses = [];
   bool _processingPose = false;
 
+  // Frame throttle — cap pose detection at ~10 FPS
+  DateTime _lastFrameTime = DateTime.fromMillisecondsSinceEpoch(0);
+  static const _frameIntervalMs = 100;
+
   // AI suggestions
   final PoseService _poseService = PoseService(apiKey: Env.openAiApiKey);
   bool _fetchingSuggestions = false;
   PoseSuggestion? _activeSuggestion;
-  double _matchScore = 0.0;
   Color _accentColor = kAccentColors[0];
+
+  // Match score and coaching — ValueNotifiers so only their consumers rebuild,
+  // not the full widget tree on every processed frame
+  final _matchScoreNotifier = ValueNotifier<double>(0.0);
+  final _coachingHintNotifier = ValueNotifier<String?>(null);
+  DateTime _lastCoachUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
   // Auto-capture
   bool _autoCaptureFired = false;
-
-  // Coaching hint
-  String? _coachingHint;
-  DateTime _lastCoachUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
   // Post-capture overlay
   Uint8List? _lastCaptureBytes;
@@ -95,7 +100,8 @@ class _CameraScreenState extends State<CameraScreen>
     if (widget.cameras.isEmpty) return;
     final cam = widget.cameras[_cameraIndex];
     _controller = CameraController(
-      cam, ResolutionPreset.high,
+      cam,
+      ResolutionPreset.medium, // 720p — sufficient for pose detection; saves ~40% processing time
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.nv21,
     );
@@ -109,44 +115,43 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   void _onFrame(CameraImage image) async {
+    // Hard cap at ~10 FPS for pose detection — camera preview still runs at full rate
+    final now = DateTime.now();
+    if (now.difference(_lastFrameTime).inMilliseconds < _frameIntervalMs) return;
     if (_processingPose) return;
+    _lastFrameTime = now;
     _processingPose = true;
+
     try {
       final input = _buildInputImage(image);
       if (input == null) return;
       final poses = await _poseDetector.processImage(input);
       if (!mounted) return;
 
-      double newScore = 0;
-      String? newHint;
+      // Update pose list without setState — only used for isEmpty/length checks
+      _poses = poses;
 
       if (_activeSuggestion != null && poses.isNotEmpty) {
-        newScore = _computeMatch(poses.first, _activeSuggestion!.poseType);
+        final newScore = _computeMatch(poses.first, _activeSuggestion!.poseType);
+        _matchScoreNotifier.value = newScore;
 
-        // Throttle coaching hint to once per second
-        final now = DateTime.now();
+        // Coaching hint throttled to ~1 per second independently of frame rate
         if (now.difference(_lastCoachUpdate).inMilliseconds > 900) {
           _lastCoachUpdate = now;
-          newHint = newScore < 0.85
+          _coachingHintNotifier.value = newScore < 0.85
               ? _computeCoachingHint(poses.first, _activeSuggestion!.poseType)
               : null;
-        } else {
-          newHint = _coachingHint;
         }
 
-        // Auto-capture at 90% match
+        // Auto-capture at 90% — fires once per selected suggestion
         if (newScore >= 0.90 && !_autoCaptureFired && !_takingPhoto && !_timerActive) {
           _autoCaptureFired = true;
           HapticFeedback.heavyImpact();
           _capturePhoto();
         }
+      } else {
+        _matchScoreNotifier.value = 0;
       }
-
-      setState(() {
-        _poses = poses;
-        _matchScore = newScore;
-        _coachingHint = newHint;
-      });
     } finally {
       _processingPose = false;
     }
@@ -221,7 +226,7 @@ class _CameraScreenState extends State<CameraScreen>
     ];
 
     String? worstHint;
-    double worstDist = 0.12; // minimum threshold to show any hint
+    double worstDist = 0.12;
 
     for (final joint in joints) {
       final key = joint[0] as String;
@@ -238,10 +243,7 @@ class _CameraScreenState extends State<CameraScreen>
 
       if (dist > worstDist) {
         final hint = _hintForJoint(key, dx, dy);
-        if (hint != null) {
-          worstDist = dist;
-          worstHint = hint;
-        }
+        if (hint != null) { worstDist = dist; worstHint = hint; }
       }
     }
 
@@ -304,11 +306,11 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   void _selectSuggestion(PoseSuggestion s) {
+    _matchScoreNotifier.value = 0;
+    _coachingHintNotifier.value = null;
     _silhouetteController.forward(from: 0);
     setState(() {
       _activeSuggestion = s;
-      _matchScore = 0;
-      _coachingHint = null;
       _autoCaptureFired = false;
       _accentColor = accentForPoseType(s.poseType);
     });
@@ -324,10 +326,7 @@ class _CameraScreenState extends State<CameraScreen>
       final bytes = await xFile.readAsBytes();
       await Gal.putImage(xFile.path);
       if (mounted) {
-        setState(() {
-          _lastCaptureBytes = bytes;
-          _showPostCapture = true;
-        });
+        setState(() { _lastCaptureBytes = bytes; _showPostCapture = true; });
         Future.delayed(const Duration(milliseconds: 2800), () {
           if (mounted) setState(() => _showPostCapture = false);
         });
@@ -415,6 +414,8 @@ class _CameraScreenState extends State<CameraScreen>
     _poseDetector.close();
     _silhouetteController.dispose();
     _flashController.dispose();
+    _matchScoreNotifier.dispose();
+    _coachingHintNotifier.dispose();
     super.dispose();
   }
 
@@ -440,16 +441,20 @@ class _CameraScreenState extends State<CameraScreen>
 
             if (_showGrid) const _GridOverlay(),
 
+            // Silhouette: rebuilds only when animation ticks OR match score changes
             if (_activeSuggestion != null)
-              AnimatedBuilder(
-                animation: _silhouetteOpacity,
-                builder: (_, __) => CustomPaint(
-                  painter: PoseSilhouettePainter(
-                    template: PoseTemplate.all[_activeSuggestion!.poseType] ??
-                        PoseTemplate.all[PoseType.neutral]!,
-                    matchScore: _matchScore,
-                    opacity: _silhouetteOpacity.value,
-                    accentColor: _accentColor,
+              ValueListenableBuilder<double>(
+                valueListenable: _matchScoreNotifier,
+                builder: (_, score, __) => AnimatedBuilder(
+                  animation: _silhouetteOpacity,
+                  builder: (_, __) => CustomPaint(
+                    painter: PoseSilhouettePainter(
+                      template: PoseTemplate.all[_activeSuggestion!.poseType] ??
+                          PoseTemplate.all[PoseType.neutral]!,
+                      matchScore: score,
+                      opacity: _silhouetteOpacity.value,
+                      accentColor: _accentColor,
+                    ),
                   ),
                 ),
               ),
@@ -471,32 +476,38 @@ class _CameraScreenState extends State<CameraScreen>
               ),
             ),
 
+            // Guide card + coaching hint: rebuilds only when score or hint changes
             if (_activeSuggestion != null)
               Positioned(
                 top: MediaQuery.of(context).padding.top + 64,
                 left: 16, right: 16,
-                child: Column(
-                  children: [
-                    _PoseGuideCard(
-                      suggestion: _activeSuggestion!,
-                      matchScore: _matchScore,
-                      accentColor: _accentColor,
-                      onDismiss: () {
-                        _silhouetteController.reverse();
-                        Future.delayed(const Duration(milliseconds: 600), () {
-                          if (mounted) setState(() {
-                            _activeSuggestion = null;
-                            _matchScore = 0;
-                            _coachingHint = null;
-                          });
-                        });
-                      },
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _matchScoreNotifier,
+                  builder: (_, score, __) => ValueListenableBuilder<String?>(
+                    valueListenable: _coachingHintNotifier,
+                    builder: (_, hint, __) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _PoseGuideCard(
+                          suggestion: _activeSuggestion!,
+                          matchScore: score,
+                          accentColor: _accentColor,
+                          onDismiss: () {
+                            _silhouetteController.reverse();
+                            _matchScoreNotifier.value = 0;
+                            _coachingHintNotifier.value = null;
+                            Future.delayed(const Duration(milliseconds: 600), () {
+                              if (mounted) setState(() => _activeSuggestion = null);
+                            });
+                          },
+                        ),
+                        if (hint != null) ...[
+                          const SizedBox(height: 8),
+                          _CoachingHint(hint: hint, accentColor: _accentColor),
+                        ],
+                      ],
                     ),
-                    if (_coachingHint != null) ...[
-                      const SizedBox(height: 8),
-                      _CoachingHint(hint: _coachingHint!, accentColor: _accentColor),
-                    ],
-                  ],
+                  ),
                 ),
               ),
 
@@ -522,21 +533,24 @@ class _CameraScreenState extends State<CameraScreen>
                 ),
               ),
 
+            // Bottom controls: shutter ring rebuilds only when score changes
             Positioned(
               bottom: 0, left: 0, right: 0,
-              child: _BottomControls(
-                onSuggest: _fetchingSuggestions ? null : _getSuggestions,
-                onShutter: _timerActive ? null : _capturePhoto,
-                onTimer: _timerActive ? _cancelTimer : _startTimer,
-                onFlip: _flipCamera,
-                matchScore: _matchScore,
-                accentColor: _accentColor,
-                isFetchingSuggestions: _fetchingSuggestions,
-                timerActive: _timerActive,
+              child: ValueListenableBuilder<double>(
+                valueListenable: _matchScoreNotifier,
+                builder: (_, score, __) => _BottomControls(
+                  onSuggest: _fetchingSuggestions ? null : _getSuggestions,
+                  onShutter: _timerActive ? null : _capturePhoto,
+                  onTimer: _timerActive ? _cancelTimer : _startTimer,
+                  onFlip: _flipCamera,
+                  matchScore: score,
+                  accentColor: _accentColor,
+                  isFetchingSuggestions: _fetchingSuggestions,
+                  timerActive: _timerActive,
+                ),
               ),
             ),
 
-            // Post-capture overlay
             if (_showPostCapture && _lastCaptureBytes != null)
               GestureDetector(
                 onTap: () => setState(() => _showPostCapture = false),
@@ -657,8 +671,8 @@ class _PostCaptureOverlayState extends State<_PostCaptureOverlay>
                   color: widget.accentColor,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text('SAVED',
-                  style: const TextStyle(
+                child: const Text('SAVED',
+                  style: TextStyle(
                     color: Color(0xFF1A1A14),
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
