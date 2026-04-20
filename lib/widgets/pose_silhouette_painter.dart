@@ -3,13 +3,15 @@ import '../models/pose_template.dart';
 
 class PoseSilhouettePainter extends CustomPainter {
   final PoseTemplate template;
-  final double matchScore; // 0.0 – 1.0
-  final double opacity;    // for fade animation
+  final double matchScore;
+  final double opacity;
+  final Color accentColor;
 
   PoseSilhouettePainter({
     required this.template,
     required this.matchScore,
     required this.opacity,
+    required this.accentColor,
   });
 
   final _glowPaint = Paint()
@@ -42,12 +44,12 @@ class PoseSilhouettePainter extends CustomPainter {
 
     final color = Color.lerp(
       const Color(0xFFF5F0E8).withValues(alpha: 0.4 * opacity),
-      const Color(0xFFC8F04A).withValues(alpha: 0.9 * opacity),
+      accentColor.withValues(alpha: 0.9 * opacity),
       score,
     )!;
 
     _glowPaint
-      ..color = color.withValues(alpha: 0.15 * score * opacity)
+      ..color = color.withValues(alpha: 0.18 * score * opacity)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
     _linePaint.color = color;
     _dotPaint.color = color;
@@ -69,7 +71,7 @@ class PoseSilhouettePainter extends CustomPainter {
       final center = Offset(headPos.dx * size.width, headPos.dy * size.height);
       final radius = size.width * 0.055;
       if (score > 0.3) {
-        _headGlowPaint.color = color.withValues(alpha: 0.15 * opacity);
+        _headGlowPaint.color = color.withValues(alpha: 0.18 * opacity);
         canvas.drawCircle(center, radius + 4, _headGlowPaint);
       }
       canvas.drawCircle(center, radius, _dotPaint);
@@ -84,5 +86,6 @@ class PoseSilhouettePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(PoseSilhouettePainter old) =>
-      old.matchScore != matchScore || old.opacity != opacity || old.template != template;
+      old.matchScore != matchScore || old.opacity != opacity ||
+      old.template != template || old.accentColor != accentColor;
 }

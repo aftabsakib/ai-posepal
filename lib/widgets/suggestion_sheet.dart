@@ -4,6 +4,16 @@ import '../models/pose_suggestion.dart';
 import '../models/pose_template.dart';
 import 'pose_silhouette_painter.dart';
 
+// Tri-color palette exposed so camera screen can sync ring/silhouette color
+const kAccentColors = [
+  Color(0xFFFF6B6B), // coral
+  Color(0xFF4ECDC4), // sky
+  Color(0xFFFFE66D), // yellow
+];
+
+Color accentForPoseType(PoseType type) =>
+    kAccentColors[type.index % kAccentColors.length];
+
 class SuggestionSheet extends StatelessWidget {
   final List<PoseSuggestion> suggestions;
   final ValueChanged<PoseSuggestion> onSelected;
@@ -45,24 +55,24 @@ class SuggestionSheet extends StatelessWidget {
               ),
             ),
           ),
-          const Text('Choose a pose',
+          const Text('Pick a vibe',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
               color: Color(0xFFF5F0E8),
               letterSpacing: -0.5,
             )),
           const SizedBox(height: 4),
-          const Text('Step into the silhouette on screen',
+          const Text('Step into the silhouette and strike the pose',
             style: TextStyle(fontSize: 13, color: Color(0xFF7A7A6A))),
           const SizedBox(height: 20),
-          ...suggestions.asMap().entries.map((e) => _SuggestionCard(
-            suggestion: e.value,
-            index: e.key,
+          ...suggestions.map((s) => _SuggestionCard(
+            suggestion: s,
+            accent: accentForPoseType(s.poseType),
             onTap: () {
               HapticFeedback.lightImpact();
               Navigator.pop(context);
-              onSelected(e.value);
+              onSelected(s);
             },
           )),
         ],
@@ -73,20 +83,17 @@ class SuggestionSheet extends StatelessWidget {
 
 class _SuggestionCard extends StatelessWidget {
   final PoseSuggestion suggestion;
-  final int index;
+  final Color accent;
   final VoidCallback onTap;
 
-  const _SuggestionCard({required this.suggestion, required this.index, required this.onTap});
-
-  static const _accents = [
-    Color(0xFFC8F04A),
-    Color(0xFFFFD166),
-    Color(0xFFFF8FA3),
-  ];
+  const _SuggestionCard({
+    required this.suggestion,
+    required this.accent,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final accent = _accents[index % _accents.length];
     final template = PoseTemplate.all[suggestion.poseType] ?? PoseTemplate.all[PoseType.neutral]!;
 
     return GestureDetector(
@@ -96,7 +103,7 @@ class _SuggestionCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF242418),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: accent.withValues(alpha: 0.25)),
+          border: Border.all(color: accent.withValues(alpha: 0.35)),
         ),
         child: Row(
           children: [
@@ -109,6 +116,7 @@ class _SuggestionCard extends StatelessWidget {
                     template: template,
                     matchScore: 0,
                     opacity: 1,
+                    accentColor: accent,
                   ),
                 ),
               ),
@@ -121,9 +129,10 @@ class _SuggestionCard extends StatelessWidget {
                   children: [
                     Text(suggestion.title,
                       style: TextStyle(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         fontSize: 15,
                         color: accent,
+                        letterSpacing: -0.2,
                       )),
                     const SizedBox(height: 4),
                     Text(suggestion.instruction,
@@ -139,7 +148,7 @@ class _SuggestionCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(right: 14),
               child: Icon(Icons.arrow_forward_ios_rounded,
-                color: accent.withValues(alpha: 0.6), size: 14),
+                color: accent.withValues(alpha: 0.7), size: 14),
             ),
           ],
         ),

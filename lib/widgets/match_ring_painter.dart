@@ -2,9 +2,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class MatchRingPainter extends CustomPainter {
-  final double matchScore; // 0.0 – 1.0
+  final double matchScore;
+  final Color accentColor;
 
-  const MatchRingPainter({required this.matchScore});
+  const MatchRingPainter({required this.matchScore, required this.accentColor});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -19,13 +20,11 @@ class MatchRingPainter extends CustomPainter {
 
     if (score <= 0) return;
 
-    final color = Color.lerp(const Color(0xFFF5F0E8), const Color(0xFFC8F04A), score)!;
-    final sweepAngle = 2 * pi * score;
-
+    final color = Color.lerp(accentColor.withValues(alpha: 0.4), accentColor, score)!;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -pi / 2,
-      sweepAngle,
+      2 * pi * score,
       false,
       Paint()
         ..color = color
@@ -36,5 +35,6 @@ class MatchRingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(MatchRingPainter old) => old.matchScore != matchScore;
+  bool shouldRepaint(MatchRingPainter old) =>
+      old.matchScore != matchScore || old.accentColor != accentColor;
 }

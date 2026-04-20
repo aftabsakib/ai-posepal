@@ -42,6 +42,7 @@ class _CameraScreenState extends State<CameraScreen>
   bool _fetchingSuggestions = false;
   PoseSuggestion? _activeSuggestion;
   double _matchScore = 0.0;
+  Color _accentColor = kAccentColors[0];
 
   // Animations
   late AnimationController _silhouetteController;
@@ -205,7 +206,11 @@ class _CameraScreenState extends State<CameraScreen>
 
   void _selectSuggestion(PoseSuggestion s) {
     _silhouetteController.forward(from: 0);
-    setState(() { _activeSuggestion = s; _matchScore = 0; });
+    setState(() {
+      _activeSuggestion = s;
+      _matchScore = 0;
+      _accentColor = accentForPoseType(s.poseType);
+    });
   }
 
   Future<void> _capturePhoto() async {
@@ -337,6 +342,7 @@ class _CameraScreenState extends State<CameraScreen>
                     template: PoseTemplate.all[_activeSuggestion!.poseType] ?? PoseTemplate.all[PoseType.neutral]!,
                     matchScore: _matchScore,
                     opacity: _silhouetteOpacity.value,
+                    accentColor: _accentColor,
                   ),
                 ),
               ),
@@ -365,6 +371,7 @@ class _CameraScreenState extends State<CameraScreen>
                 child: _PoseGuideCard(
                   suggestion: _activeSuggestion!,
                   matchScore: _matchScore,
+                  accentColor: _accentColor,
                   onDismiss: () {
                     _silhouetteController.reverse();
                     Future.delayed(const Duration(milliseconds: 600), () {
@@ -406,6 +413,7 @@ class _CameraScreenState extends State<CameraScreen>
                 onTimer: _timerActive ? _cancelTimer : _startTimer,
                 onFlip: _flipCamera,
                 matchScore: _matchScore,
+                accentColor: _accentColor,
                 isFetchingSuggestions: _fetchingSuggestions,
                 timerActive: _timerActive,
               ),
@@ -457,16 +465,20 @@ class _TopBar extends StatelessWidget {
 class _PoseGuideCard extends StatelessWidget {
   final PoseSuggestion suggestion;
   final double matchScore;
+  final Color accentColor;
   final VoidCallback onDismiss;
 
-  const _PoseGuideCard(
-      {required this.suggestion, required this.matchScore, required this.onDismiss});
+  const _PoseGuideCard({
+    required this.suggestion,
+    required this.matchScore,
+    required this.accentColor,
+    required this.onDismiss,
+  });
 
   @override
   Widget build(BuildContext context) {
     final pct = (matchScore * 100).round();
-    final matchColor =
-        Color.lerp(const Color(0xFFF5F0E8), const Color(0xFFC8F04A), matchScore)!;
+    final matchColor = Color.lerp(const Color(0xFFF5F0E8), accentColor, matchScore)!;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -525,6 +537,7 @@ class _BottomControls extends StatelessWidget {
   final VoidCallback onTimer;
   final VoidCallback onFlip;
   final double matchScore;
+  final Color accentColor;
   final bool isFetchingSuggestions;
   final bool timerActive;
 
@@ -534,6 +547,7 @@ class _BottomControls extends StatelessWidget {
     required this.onTimer,
     required this.onFlip,
     required this.matchScore,
+    required this.accentColor,
     required this.isFetchingSuggestions,
     required this.timerActive,
   });
@@ -555,7 +569,7 @@ class _BottomControls extends StatelessWidget {
             children: [
               _SuggestButton(
                   onTap: onSuggest, isLoading: isFetchingSuggestions),
-              _ShutterButton(onTap: onShutter, matchScore: matchScore),
+              _ShutterButton(onTap: onShutter, matchScore: matchScore, accentColor: accentColor),
               Column(
                 children: [
                   _IconBtn(icon: Icons.flip_camera_ios_rounded, onTap: onFlip),
@@ -618,8 +632,13 @@ class _SuggestButton extends StatelessWidget {
 class _ShutterButton extends StatelessWidget {
   final VoidCallback? onTap;
   final double matchScore;
+  final Color accentColor;
 
-  const _ShutterButton({required this.onTap, required this.matchScore});
+  const _ShutterButton({
+    required this.onTap,
+    required this.matchScore,
+    required this.accentColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -628,7 +647,7 @@ class _ShutterButton extends StatelessWidget {
       child: SizedBox(
         width: 84, height: 84,
         child: CustomPaint(
-          painter: MatchRingPainter(matchScore: matchScore),
+          painter: MatchRingPainter(matchScore: matchScore, accentColor: accentColor),
           child: Center(
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
@@ -640,7 +659,7 @@ class _ShutterButton extends StatelessWidget {
                   BoxShadow(
                     color: Color.lerp(
                         const Color(0xFFF5F0E8).withValues(alpha: 0.3),
-                        const Color(0xFFC8F04A).withValues(alpha: 0.55),
+                        accentColor.withValues(alpha: 0.55),
                         matchScore)!,
                     blurRadius: 16 + matchScore * 12,
                     spreadRadius: matchScore * 4,

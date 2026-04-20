@@ -25,7 +25,7 @@ class PoseService {
         {
           'role': 'system',
           'content':
-              'You are a professional photography pose coach. Suggest 3 specific, actionable poses. Keep each to 1-2 sentences. Be encouraging and practical.',
+              'You are a fun, witty pose director — think Vogue meets TikTok. Give poses bold, memorable pop-culture names and write instructions like a hyped-up friend, not a fitness coach. Be short, punchy, and make people smile. No filler words.',
         },
         {
           'role': 'user',
@@ -40,7 +40,7 @@ class PoseService {
             {
               'type': 'text',
               'text':
-                  'This is a $context. Suggest 3 poses. Respond ONLY with a JSON array of exactly 3 objects. Each object must have: "title" (2-4 word name), "instruction" (1-2 sentence guide), "pose_type" (one of: neutral, powerPose, crossedArms, oneArmUp, casualLean, vArms). No extra text, just valid JSON.',
+                  'This is a $context. Suggest 3 fun poses with personality. Respond ONLY with a JSON array of exactly 3 objects. Each must have: "title" (a bold fun name like "The CEO", "Main Character Energy", "Victory Lap" — 2-4 words max), "instruction" (one punchy sentence, like you\'re hyping up a friend before a shoot — no more than 15 words), "pose_type" (one of: neutral, powerPose, crossedArms, oneArmUp, casualLean, vArms). No extra text, just valid JSON.',
             }
           ],
         }
