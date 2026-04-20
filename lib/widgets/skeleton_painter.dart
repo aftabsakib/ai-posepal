@@ -8,6 +8,15 @@ class SkeletonPainter extends CustomPainter {
 
   SkeletonPainter({required this.poses, required this.imageSize, required this.isFrontCamera});
 
+  final _glowPaint = Paint()
+    ..strokeCap = StrokeCap.round
+    ..strokeWidth = 14;
+  final _linePaint = Paint()
+    ..strokeCap = StrokeCap.round
+    ..strokeWidth = 3.5;
+  final _dotOuterPaint = Paint();
+  final _dotInnerPaint = Paint();
+
   static const _connections = [
     [PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder],
     [PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow],
@@ -38,26 +47,23 @@ class SkeletonPainter extends CustomPainter {
         final p1 = _translate(a.x, a.y, size);
         final p2 = _translate(b.x, b.y, size);
 
-        canvas.drawLine(p1, p2, Paint()
-          ..color = const Color(0xFF6C63FF).withOpacity(0.25 * confidence)
-          ..strokeWidth = 14
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14));
+        _glowPaint
+          ..color = const Color(0xFF6C63FF).withValues(alpha: 0.25 * confidence)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+        canvas.drawLine(p1, p2, _glowPaint);
 
-        canvas.drawLine(p1, p2, Paint()
-          ..color = Color.lerp(const Color(0xFF03DAC6), const Color(0xFF6C63FF), confidence)!
-              .withOpacity(0.85 * confidence)
-          ..strokeWidth = 3.5
-          ..strokeCap = StrokeCap.round);
+        _linePaint.color = Color.lerp(const Color(0xFF03DAC6), const Color(0xFF6C63FF), confidence)!
+            .withValues(alpha: 0.85 * confidence);
+        canvas.drawLine(p1, p2, _linePaint);
       }
 
       for (final lm in pose.landmarks.values) {
         if (lm.likelihood < 0.6) continue;
         final p = _translate(lm.x, lm.y, size);
-        canvas.drawCircle(p, 5.5, Paint()
-          ..color = Colors.white.withOpacity(0.9 * lm.likelihood));
-        canvas.drawCircle(p, 3.5, Paint()
-          ..color = const Color(0xFF03DAC6).withOpacity(lm.likelihood));
+        _dotOuterPaint.color = Colors.white.withValues(alpha: 0.9 * lm.likelihood);
+        _dotInnerPaint.color = const Color(0xFF03DAC6).withValues(alpha: lm.likelihood);
+        canvas.drawCircle(p, 5.5, _dotOuterPaint);
+        canvas.drawCircle(p, 3.5, _dotInnerPaint);
       }
     }
   }
@@ -70,5 +76,6 @@ class SkeletonPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(SkeletonPainter old) => true;
+  bool shouldRepaint(SkeletonPainter old) =>
+      old.poses != poses || old.imageSize != imageSize || old.isFrontCamera != isFrontCamera;
 }

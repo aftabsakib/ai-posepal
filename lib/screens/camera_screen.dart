@@ -388,7 +388,7 @@ class _CameraScreenState extends State<CameraScreen>
                     width: 140, height: 140,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.black.withOpacity(0.6),
+                      color: Colors.black.withValues(alpha: 0.6),
                       border: Border.all(color: const Color(0xFF6C63FF), width: 3),
                     ),
                     child: Center(
@@ -445,8 +445,8 @@ class _TopBar extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: showGrid
-                  ? const Color(0xFF6C63FF).withOpacity(0.9)
-                  : Colors.black.withOpacity(0.4),
+                  ? const Color(0xFF6C63FF).withValues(alpha: 0.9)
+                  : Colors.black.withValues(alpha: 0.4),
             ),
             child: const Icon(Icons.grid_on_rounded, color: Colors.white, size: 20),
           ),
@@ -477,9 +477,9 @@ class _PoseGuideCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.55),
+            color: Colors.black.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: matchColor.withOpacity(0.5)),
+            border: Border.all(color: matchColor.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
@@ -487,8 +487,8 @@ class _PoseGuideCard extends StatelessWidget {
                 width: 40, height: 40,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: matchColor.withOpacity(0.15),
-                  border: Border.all(color: matchColor.withOpacity(0.6)),
+                  color: matchColor.withValues(alpha: 0.15),
+                  border: Border.all(color: matchColor.withValues(alpha: 0.6)),
                 ),
                 child: Center(
                   child: Text('$pct%',
@@ -558,7 +558,7 @@ class _BottomControls extends StatelessWidget {
             left: 28, right: 28, top: 24,
             bottom: MediaQuery.of(context).padding.bottom + 28,
           ),
-          color: Colors.black.withOpacity(0.45),
+          color: Colors.black.withValues(alpha: 0.45),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -609,7 +609,7 @@ class _SuggestButton extends StatelessWidget {
           ),
           boxShadow: onTap != null
               ? [BoxShadow(
-                  color: const Color(0xFF6C63FF).withOpacity(0.4),
+                  color: const Color(0xFF6C63FF).withValues(alpha: 0.4),
                   blurRadius: 12,
                   offset: const Offset(0, 4))]
               : [],
@@ -658,7 +658,7 @@ class _ShutterButton extends StatelessWidget {
                   BoxShadow(
                     color: Color.lerp(
                         Colors.white30,
-                        const Color(0xFF03DAC6).withOpacity(0.6),
+                        const Color(0xFF03DAC6).withValues(alpha: 0.6),
                         matchScore)!,
                     blurRadius: 16 + matchScore * 12,
                     spreadRadius: matchScore * 4,
@@ -690,8 +690,8 @@ class _IconBtn extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: active
-              ? const Color(0xFF6C63FF).withOpacity(0.8)
-              : Colors.white.withOpacity(0.12),
+              ? const Color(0xFF6C63FF).withValues(alpha: 0.8)
+              : Colors.white.withValues(alpha: 0.12),
         ),
         child: Icon(icon, color: Colors.white, size: 22),
       ),
@@ -712,7 +712,7 @@ class _GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.25)
+      ..color = Colors.white.withValues(alpha: 0.25)
       ..strokeWidth = 0.8;
     canvas.drawLine(Offset(size.width / 3, 0), Offset(size.width / 3, size.height), paint);
     canvas.drawLine(Offset(size.width * 2 / 3, 0), Offset(size.width * 2 / 3, size.height), paint);

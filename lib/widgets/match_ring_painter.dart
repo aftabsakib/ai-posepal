@@ -8,18 +8,19 @@ class MatchRingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final score = matchScore.clamp(0.0, 1.0);
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2 - 4;
 
     canvas.drawCircle(center, radius, Paint()
-      ..color = Colors.white.withOpacity(0.15)
+      ..color = Colors.white.withValues(alpha: 0.15)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4);
 
-    if (matchScore <= 0) return;
+    if (score <= 0) return;
 
-    final color = Color.lerp(const Color(0xFF6C63FF), const Color(0xFF03DAC6), matchScore)!;
-    final sweepAngle = 2 * pi * matchScore;
+    final color = Color.lerp(const Color(0xFF6C63FF), const Color(0xFF03DAC6), score)!;
+    final sweepAngle = 2 * pi * score;
 
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),

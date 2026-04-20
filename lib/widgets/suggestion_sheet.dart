@@ -18,7 +18,7 @@ class SuggestionSheet extends StatelessWidget {
     return showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       isScrollControlled: true,
       builder: (_) => SuggestionSheet(suggestions: suggestions, onSelected: onSelected),
     );
@@ -32,9 +32,9 @@ class SuggestionSheet extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.65),
+            color: Colors.black.withValues(alpha: 0.65),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(top: BorderSide(color: Colors.white.withOpacity(0.12))),
+            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.12))),
           ),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           child: Column(
@@ -55,7 +55,7 @@ class SuggestionSheet extends StatelessWidget {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: -0.3)),
               const SizedBox(height: 4),
               Text('Step into the guide silhouette on screen',
-                style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.55))),
+                style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.55))),
               const SizedBox(height: 20),
               ...suggestions.asMap().entries.map((e) => _SuggestionCard(
                 suggestion: e.value,
@@ -98,8 +98,8 @@ class _SuggestionCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(colors: [colors[0].withOpacity(0.15), colors[1].withOpacity(0.08)]),
-          border: Border.all(color: colors[0].withOpacity(0.4)),
+          gradient: LinearGradient(colors: [colors[0].withValues(alpha: 0.15), colors[1].withValues(alpha: 0.08)]),
+          border: Border.all(color: colors[0].withValues(alpha: 0.4)),
         ),
         child: Row(
           children: [
@@ -116,7 +116,7 @@ class _SuggestionCard extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [colors[0].withOpacity(0.2), Colors.transparent],
+                        colors: [colors[0].withValues(alpha: 0.2), Colors.transparent],
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
@@ -142,7 +142,7 @@ class _SuggestionCard extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.only(right: 14),
-              child: Icon(Icons.arrow_forward_ios_rounded, color: colors[0].withOpacity(0.7), size: 14),
+              child: Icon(Icons.arrow_forward_ios_rounded, color: colors[0].withValues(alpha: 0.7), size: 14),
             ),
           ],
         ),

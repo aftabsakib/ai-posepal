@@ -65,6 +65,9 @@ class PoseService {
 
     final jsonStart = text.indexOf('[');
     final jsonEnd = text.lastIndexOf(']') + 1;
+    if (jsonStart == -1 || jsonEnd <= jsonStart) {
+      throw Exception('Unexpected response format from OpenAI API');
+    }
     final jsonStr = text.substring(jsonStart, jsonEnd);
     final list = jsonDecode(jsonStr) as List;
 
