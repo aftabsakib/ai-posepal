@@ -31,6 +31,8 @@ class _CameraScreenState extends State<CameraScreen>
   int _cameraIndex = 0;
   double _currentZoom = 1.0;
   double _baseZoom = 1.0;
+  double _minZoom = 1.0;
+  double _maxZoom = 1.0;
 
   // ML Kit
   final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
@@ -89,6 +91,8 @@ class _CameraScreenState extends State<CameraScreen>
     );
     await _controller!.initialize();
     if (!mounted) return;
+    _minZoom = await _controller!.getMinZoomLevel();
+    _maxZoom = await _controller!.getMaxZoomLevel();
     _currentZoom = 1.0;
     _controller!.startImageStream(_onFrame);
     setState(() {});
@@ -262,9 +266,7 @@ class _CameraScreenState extends State<CameraScreen>
 
   Future<void> _handleScaleUpdate(ScaleUpdateDetails d) async {
     if (_controller == null) return;
-    final minZoom = await _controller!.getMinZoomLevel();
-    final maxZoom = await _controller!.getMaxZoomLevel();
-    final zoom = (_baseZoom * d.scale).clamp(minZoom, maxZoom);
+    final zoom = (_baseZoom * d.scale).clamp(_minZoom, _maxZoom);
     await _controller!.setZoomLevel(zoom);
     setState(() => _currentZoom = zoom);
   }
@@ -278,12 +280,14 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
     if (_controller == null || !_controller!.value.isInitialized) return;
     if (state == AppLifecycleState.inactive) {
       _controller?.stopImageStream();
     } else if (state == AppLifecycleState.resumed) {
-      _initCamera();
+      await _controller?.dispose();
+      _controller = null;
+      await _initCamera();
     }
   }
 
@@ -310,10 +314,9 @@ class _CameraScreenState extends State<CameraScreen>
 
     final isFront =
         widget.cameras[_cameraIndex].lensDirection == CameraLensDirection.front;
-    final imageSize = Size(
-      _controller!.value.previewSize!.height,
-      _controller!.value.previewSize!.width,
-    );
+    final rawSize = _controller!.value.previewSize;
+    if (rawSize == null) return const SizedBox.shrink();
+    final imageSize = Size(rawSize.height, rawSize.width);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -333,7 +336,7 @@ class _CameraScreenState extends State<CameraScreen>
                 animation: _silhouetteOpacity,
                 builder: (_, __) => CustomPaint(
                   painter: PoseSilhouettePainter(
-                    template: PoseTemplate.all[_activeSuggestion!.poseType]!,
+                    template: PoseTemplate.all[_activeSuggestion!.poseType] ?? PoseTemplate.all[PoseType.neutral]!,
                     matchScore: _matchScore,
                     opacity: _silhouetteOpacity.value,
                   ),

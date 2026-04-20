@@ -90,7 +90,7 @@ class _SuggestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = _gradients[index % _gradients.length];
-    final template = PoseTemplate.all[suggestion.poseType]!;
+    final template = PoseTemplate.all[suggestion.poseType] ?? PoseTemplate.all[PoseType.neutral]!;
 
     return GestureDetector(
       onTap: onTap,
