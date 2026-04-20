@@ -42,7 +42,7 @@ class SkeletonPainter extends CustomPainter {
           ..color = const Color(0xFF6C63FF).withOpacity(0.25 * confidence)
           ..strokeWidth = 14
           ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14));
 
         canvas.drawLine(p1, p2, Paint()
           ..color = Color.lerp(const Color(0xFF03DAC6), const Color(0xFF6C63FF), confidence)!
